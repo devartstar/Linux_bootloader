@@ -63,11 +63,27 @@ uint32_t convert_chs_to_lba(int cylinder, int head, int sector) {
 }
 
 void print_mbr_info(const MBR *mbr) {
+  
   printf("Boot Signature: 0x%X\n", mbr->boot_signature);
 
+  if(mbr->boot_signature != 0xAA55) {
+    printf("\nInvalid Boot Signature: 0x%04X (expected 0xAA55)\n", mbr->boot_signature);
+  } else {
+    printf("\nBoot Signature OK\n");
+  }
+
+  int bootable_count = 0;
+  int valid_count = 0;
   for (int i = 0; i < 4; i++) {
     const PartitionEntry *pe = &mbr->partitions[i];
     if (pe->partition_type != 0) {
+  
+      // Checks for valid Partition
+      valid_count++;
+      if(pe->boot_indicator == 0x80) {
+        bootable_count++;
+      }
+
       int cyl_start, head_start, sec_start;
       int cyl_end, head_end, sec_end;
 
@@ -92,4 +108,12 @@ void print_mbr_info(const MBR *mbr) {
       }
     }
   }
+
+  if(valid_count == 0) {
+    printf("Warning: No Valid Partition\n");
+  }
+  if(bootable_count > 1) {
+    printf("Warning: Multiple bootale partitions %d\n", bootable_count);
+  }
 }
+

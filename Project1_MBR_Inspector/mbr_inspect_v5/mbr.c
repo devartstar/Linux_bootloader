@@ -63,7 +63,14 @@ uint32_t convert_chs_to_lba(int cylinder, int head, int sector) {
 }
 
 void print_mbr_info(const MBR *mbr) {
+  
   printf("Boot Signature: 0x%X\n", mbr->boot_signature);
+
+  if(mbr->boot_signature != 0xAA55) {
+    printf("\nInvalid Boot Signature: 0x%04X (expected 0xAA55)\n", mbr->boot_signature);
+  } else {
+    printf("\nBoot Signature OK\n");
+  }
 
   for (int i = 0; i < 4; i++) {
     const PartitionEntry *pe = &mbr->partitions[i];
@@ -93,3 +100,4 @@ void print_mbr_info(const MBR *mbr) {
     }
   }
 }
+
