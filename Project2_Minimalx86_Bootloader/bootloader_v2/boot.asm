@@ -20,6 +20,9 @@ start:
 	call print_str
 
 	; BIOS Reads and load 1 sector at CHS = (0,0,2) into Memory 0x0500
+	mov ax, 0x0500
+	mov es, ax
+	mov bx, 0x0000
 	mov ah, 0x02
 	mov al, 1
 	mov ch, 0
@@ -30,17 +33,20 @@ start:
 	mov es, ax
 	int 0x13
 
+	; if read failed
 	jc disk_error
 
 	; print the 16 bytes in the sector at (0, 0, 2)
-	mov si, 0x0500
+	mov ax, 0
+	mov ds, ax
+	mov si, 0x5000
 	mov cx, 16
 
 print_loop:
 	lodsb
-	cmp al,0
+	cmp al, 0
 	je halt
-	mov ah,0x0E
+	mov ah, 0x0E
 	int 0x10
 	loop print_loop
 
