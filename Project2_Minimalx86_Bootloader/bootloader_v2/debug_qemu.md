@@ -69,4 +69,4 @@ x/20i $rip # disamble around instruction pointer
 
 - Step Over `ni`
 
-
+- Print char (si) of lodsb `print/c $al`

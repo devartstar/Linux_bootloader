@@ -59,7 +59,7 @@ print_str:
 
 	; if loaded byte = 0
 	cmp al,0
-	jmp .done
+	je .done
 
 	; points to the BIOS TTY teletype output function
 	mov ah, 0x0E
