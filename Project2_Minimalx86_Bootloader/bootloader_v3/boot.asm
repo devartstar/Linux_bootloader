@@ -3,62 +3,55 @@
 
 start:
 	cli
-	xor ax,ax
-	mov ds,ax
-	mov es,ax
+	xor ax, ax
+	mov ds, ax
+	mov es, ax
 	sti
 
-	; Debug, Hello From Sector 1
+	; Hello from Sector 1
 	mov si, msg
 	call print_str
 
-	; Read stage2.bin from LBS=2 CHS = (0,0,3) -> 0x0600:0000
+	; Load sector at CHS (0,0,3) into ES:BX = 0x0600:0000
 	mov ax, 0x0600
 	mov es, ax
 	xor bx, bx
 
-	; int 0x13 - disk reads es:bx as the buffer
-
-	; 0x02 is for read operation
-	; 1 sector
-	mov ah, 0x02
-	mov al, 1
-
-	; cylinder info
-	mov ch, 0
-	mov cl, 3
-
-	; header info
-	mov dh, 0
-	mov dl, 0x80
+	mov ah, 0x02    ; Read sector(s)
+	mov al, 1       ; 1 sector
+	mov ch, 0       ; Cylinder
+	mov cl, 3       ; Sector (starts at 1)
+	mov dh, 0       ; Head
+	mov dl, 0x80    ; First hard disk
 
 	int 0x13
 	jc disk_error
 
-	; jmp to sector 2
-	jmp 0x0600:0x0000
+	; If successful
+	mov si, load_ok
+	call print_str
+
+	; Jump to loaded stage2
+	jmp 0x0600:0000
 
 disk_error:
 	mov si, err_msg
 	call print_str
-	jmp $	
+	jmp $
 
 print_str:
 	lodsb
-	cmp al,0
+	cmp al, 0
 	je .done
-	mov ah,0x0e
+	mov ah, 0x0E
 	int 0x10
 	jmp print_str
-
-.done
+.done:
 	ret
-	
-msg:
-	db "Hello From Sector 1", 0
 
-err_msg:
-	db "Disk Read Error", 0
+msg:      db "Hello From Sector 1", 0
+load_ok:  db " [Stage 2 loaded]", 0
+err_msg:  db " [Disk Read Error!]", 0
 
-times 510-($-$$) db 0
+times 510 - ($ - $$) db 0
 dw 0xAA55
