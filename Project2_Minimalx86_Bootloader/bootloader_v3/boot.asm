@@ -24,6 +24,7 @@ start:
 	mov dh, 0       ; Head
 	mov dl, 0x80    ; First hard disk
 
+	; BIOS reads into ES:BX = 0000:0500 = 0x0500
 	int 0x13
 	jc disk_error
 
