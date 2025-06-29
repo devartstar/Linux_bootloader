@@ -66,90 +66,44 @@ start:
 .done_input:
 	mov byte [di], 0	; Null-terminate string
 
-	call newline
+	; Echo newline
+	mov ah, 0x0E
+	mov al, 0x0D
+	int 0x10
+	mov al, 0x0A
+	int 0x10
 
-	; Check for empty input first
-	mov si, input_buf
+	; Split input into command and argument
+	call split_input
+
+	; Check for empty command first
+	mov si, cmd_buf
 	mov al, [si]
 	cmp al, 0
 	je cmd_name_handler  ; Empty input -> show hello
 
+	; Compare with "name"
 	mov si, cmd_buf
-	call .str_compare_name
-	jnc .cmd_name
+	mov di, cmd_name
+	call str_cmp
+	jnc cmd_name_handler
 
+	; Compare with "help"
 	mov si, cmd_buf
-	call .str_comapre_help
-	jnc .cmd_help
+	mov di, cmd_help
+	call str_cmp
+	jnc cmd_help_handler
 
+	; Compare with "clear"
 	mov si, cmd_buf
-	call .str_compare_clear
-	jnc .cmd_clear
+	mov di, cmd_clear
+	call str_cmp
+	jnc cmd_clear_handler
 
-	jmp .unknown_command
-
-.cmd_name:
-	mov si, msg_hello
+	; Unknown input
+	mov si, msg_unknown
 	call print_str
-	mov si, arg_buf
-	call print_str
-	call newline
-	jmp .reset
-
-; Splitting the input into command and argument buffer
-.split_input:
-	push si
-	push di
-	push cx
-	push ax
-
-	mov si, input_buf
-	mov di, cmd_buf
-	mov cx, 0
-
-.copy_cmd:
-	lodsb
-	cmp al, 0
-	je .done
-
-	cmp al, ' '
-	je .skip_space
-
-	mov [di], al
-	inc di
-
-	inc cx
-	cmp cx, 15
-	je .done
-
-	jmp .copy_cmd
-
-.skip_space:
-	mov byte [di], 0	; null terminated the command buffer
-	jmp .copy_arg
-
-.copy_arg:
-	mov di, arg_buf
-
-.skip_ws:
-	lodsb
-	cmp al, ' '
-	je .skip_ws
-
-	cmp al, 0
-	je .done
-
-	mov [di], al
-	inc di
-	jmp copy_arg
-
-.done:
-	mov byte [di], 0
-	pop ax
-	pop cx
-	pop di
-	pop si
-	ret
+	jmp reset
 
 reset:
 	jmp start
@@ -161,6 +115,23 @@ reset:
 cmd_name_handler:
 	mov si, msg_hello
 	call print_str
+	
+	; Check if there's an argument
+	mov si, arg_buf
+	mov al, [si]
+	cmp al, 0
+	je .no_arg
+	
+	; Print the argument
+	call print_str
+	jmp .finish
+
+.no_arg:
+	mov si, default_name
+	call print_str
+
+.finish:
+	call newline
 	jmp reset
 
 cmd_help_handler:
@@ -243,14 +214,6 @@ print_hex16:
 ;	     Print Null-Terminated String		       ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-newline:
-	mov ah, 0x0E
-	mov al, 13
-	int 0x10
-	mov al, 10
-	int 0x10
-	ret
-
 print_str:
 	lodsb
 	cmp al, 0
@@ -262,6 +225,79 @@ print_str:
 	ret
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;	       Input Splitting Routine		       ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+; Splits input_buf into cmd_buf and arg_buf
+split_input:
+	push si
+	push di
+	push cx
+	push ax
+
+	; Clear both buffers first
+	mov di, cmd_buf
+	mov cx, 16
+	xor al, al
+	rep stosb
+	
+	mov di, arg_buf
+	mov cx, 48
+	xor al, al
+	rep stosb
+
+	mov si, input_buf
+	mov di, cmd_buf
+	mov cx, 0
+
+.copy_cmd:
+	lodsb
+	cmp al, 0
+	je .done
+	cmp al, ' '
+	je .skip_space
+	mov [di], al
+	inc di
+	inc cx
+	cmp cx, 15
+	je .done
+	jmp .copy_cmd
+
+.skip_space:
+	mov byte [di], 0	; null-terminate cmd_buf
+	jmp .copy_arg
+
+.copy_arg:
+	mov di, arg_buf
+.skip_ws:
+	lodsb
+	cmp al, ' '
+	je .skip_ws
+	cmp al, 0
+	je .done
+	mov [di], al
+	inc di
+	jmp .copy_arg
+
+.done:
+	mov byte [di], 0
+	pop ax
+	pop cx
+	pop di
+	pop si
+	ret
+
+; Helper function for newline
+newline:
+	mov ah, 0x0E
+	mov al, 13
+	int 0x10
+	mov al, 10
+	int 0x10
+	ret
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;		    Data Segment				       ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -271,10 +307,11 @@ cmd_clear:     db "clear", 0
 
 msg:           db "Magic Number: 0x", 0
 prompt_msg:    db 13, 10, "Enter your Name: ", 0
-msg_hello:     db 13, 10, "Hello Devjit!", 0
+msg_hello:     db 13, 10, "Hello ", 0
 msg_help:      db 13, 10, "Commands: name, help, clear", 0
 msg_unknown:   db 13, 10, "Unknown Command!", 0
+default_name:  db "Devjit!", 0
 
-input_buf:	times 64 db 0
-cmd_buf:	times 64 db 0
-arg_buf:	times 64 db 0
+input_buf:     times 64 db 0
+cmd_buf:       times 16 db 0
+arg_buf:       times 48 db 0
