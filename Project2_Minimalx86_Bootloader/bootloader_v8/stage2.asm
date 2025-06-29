@@ -1,190 +1,159 @@
 [BITS 16]
-[ORG 0x6000]
+[ORG 0x6000]              ; Load address for stage 2
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;             STAGE 2 BOOTLOADER ENTRY POINT               ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 start:
+	; Print initial message
 	mov si, msg
 	call print_str
 
-	; Read the magic number from memory location
+	; Read and print 16-bit "magic number" from memory 0x0500
 	mov ax, [0x0500]
 	call print_hex16
 
-	; prompt
+	; Prompt for user input
 	mov si, prompt_msg
 	call print_str
 
-	; Read the line of input into 0x7000
-	mov di, input_buf	; input buffer start
-	xor cx, cx		; character count = 0
-	; di will point to where the type character stored
-	; cx tracks the number of characters typed
+	; Set DI to input buffer and clear CX (character count)
+	mov di, input_buf
+	xor cx, cx
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                 KEYBOARD INPUT HANDLING                  ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;		 INPUT HANDELLING		;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 .read_loop:
-	xor ax,ax
-	; 0x16 is BIOS keyboard service
-	int 0x16
-	; ah = 0, it waits for key press
-	; value stored in al
+	xor ax, ax
+	int 0x16                  ; BIOS keyboard read (wait for key)
 
-	cmp al, 0x0D	; if <ENTER> is pressed
+	; Check if user pressed ENTER (0x0D)
+	cmp al, 0x0D
 	je .done_input
 
-	cmp al, 0x08	; if <BACKSPACE> is pressed
+	; Check if BACKSPACE (0x08)
+	cmp al, 0x08
 	je .handle_backspace
 
-	; Regular character is pressed
-	mov [di], al
+	; Regular character
+	mov [di], al             ; Store character in buffer
 	inc di
 	inc cx
 
-	; Print the character pressed in input line
-	mov ah, 0x0E
+	mov ah, 0x0E             ; BIOS teletype output
 	int 0x10
 	jmp .read_loop
 
 .handle_backspace:
-	cmp cx, 0	; if nothing is typed
-	je .read_loop	; ignore and continue reading
+	cmp cx, 0                ; If no characters, ignore
+	je .read_loop
 
-	; di points to the current input buffer location
-	dec di		; move a step back in inp. buffer location	
-	dec cx		; decrement number of characters
+	; Move cursor and pointer one step back
+	dec di
+	dec cx
 
-	; TRICK: FOR HANDELLING BACKSPACE
-	; 1. Move the cursor back
+	; Trick: backspace visually and erase character
 	mov ah, 0x0E
-	mov al, 0x08	; 0x08 is for backspace
+	mov al, 0x08             ; Backspace
 	int 0x10
-	; 2. Print Space
-	mov al, ' '
+	mov al, ' '             ; Space to erase
 	int 0x10
-	; 3. Move the cursor back again
-	mov al, 0x08
+	mov al, 0x08             ; Move back again
 	int 0x10
 	jmp .read_loop
 
 .done_input:
+	; Null terminate the string
+	mov byte [di], 0
 
-	; Input is "name"
+	; Check input against known commands
 	mov si, input_buf
-	call .str_compare_name
-	je .cmd_name
+	mov di, cmd_name
+	call str_cmp
+	jnc cmd_name_handler     ; Match found
 
-	; Input is "help"
 	mov si, input_buf
-	call .str_compare_help
-	je .cmd_help		; carry falg = 0, ie. success operation
-	
-	; Input is "clear"
-	mov si, input_buf
-	call .str_compare_clear
-	je .cmd_clear
+	mov di, cmd_help
+	call str_cmp
+	jnc cmd_help_handler
 
-	; Default message for invalid input
+	mov si, input_buf
+	mov di, cmd_clear
+	call str_cmp
+	jnc cmd_clear_handler
+
+	; No match = unknown command
 	mov si, msg_unknown
 	call print_str
-	jmp .reset
+	jmp reset
 
-.reset:
+reset:
 	jmp start
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                    COMMAND HANDLERS                      ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;		STRING COMPARISION		;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; String Comaprision
-.str_cmp:
-	.next:
-		lodsb		; Loads the byte in [si] in al
-		scasb		; compare byte in al with one in [bi]
-		; if the current byte from both string matches - zf=1
-		jne .fail
-
-		; test if al == 0, ie. reached end of string
-		test al, al
-		jnz .next	; if not zero continue the loop
-
-		clc		; cleare the carry flag - ie. success
-		ret
-
-	.fail:
-		stc		; set the carry flag means failure
-		ret
-
-.str_compare_name:
-	mov di, cmd_name
-	call .str_cmp
-	ret
-
-.str_compare_help:
-	mov di, cmd_help
-	call .str_cmp
-	ret
-
-.str_compare_clear:
-	mov di, cmd_clear
-	call .str_cmp
-	ret
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;		COMMAND HANDELLING		;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-.cmd_name:
+cmd_name_handler:
 	mov si, msg_hello
 	call print_str
-	jmp .reset
+	jmp reset
 
-.cmd_help:
+cmd_help_handler:
 	mov si, msg_help
 	call print_str
-	jmp .reset
+	jmp reset
 
-.cmd_clear:
-	mov ax, 0x0600		; Move the screen up
-	mov bh, 0x07		; attribute: light grey on black
-	mov cx, 0x0000		; upper left corner
-	mov dx, 0x184F		; lower right corner
+cmd_clear_handler:
+	; Scroll screen up (clear)
+	mov ax, 0x0600           ; BIOS scroll function
+	mov bh, 0x07             ; Attribute: light grey on black
+	mov cx, 0x0000           ; Top-left corner
+	mov dx, 0x184F           ; Bottom-right corner
 	int 0x10
 
-	mov ax, 0x0200		; set the cursor at 0,0
+	; Move cursor to (0,0)
+	mov ax, 0x0200
 	mov bx, 0x0000
 	mov dx, 0x0000
 	int 0x10
-	jmp .reset
+	jmp reset
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                PRINT HELPER ROUTINES                     ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;		PRINT HANDELLING		;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Print null-terminated string from [SI]
+print_str:
+	lodsb
+	cmp al, 0
+	je .done
+	mov ah, 0x0E
+	int 0x10
+	jmp print_str
+.done:
+	ret
 
-; Print ax in hex format
+; Print 16-bit AX as hex (uses BIOS int 0x10)
 print_hex16:
 	push ax
 	push bx
 	push cx
 	push dx
 
-	mov cx, 4
+	mov cx, 4                ; 4 hex digits (16-bit)
 
 .next_nibble:
-
-	; Rotate left by 4 bits
-	rol ax, 4
+	rol ax, 4                ; Rotate left 4 bits
 	mov bl, al
 	and bl, 0x0F
 	add bl, '0'
 	cmp bl, '9'
-
-	; if val - 0 to 9 then print it directly
 	jbe .print
-
-	; if val > 9 - ASCII conversion '9' + 7 = 'A'
-	add bl, 7
+	add bl, 7               ; Convert to 'A'-'F'
 
 .print:
 	mov ah, 0x0E
@@ -198,30 +167,38 @@ print_hex16:
 	pop ax
 	ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;              STRING COMPARISON ROUTINE                   ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-print_str:
-	lodsb
-	cmp al, 0
-	je .done
-	mov ah, 0x0E
-	int 0x10
-	jmp print_str
-
-.done:
+; Compares strings at [SI] and [DI]
+; CF = 0 if match (use JNC to branch)
+str_cmp:
+.next:
+	lodsb                  ; Load from SI → AL, SI++
+	scasb                  ; Compare AL with [DI], DI++
+	jne .fail
+	test al, al            ; End of string?
+	jnz .next
+	clc                    ; Strings matched
+	ret
+.fail:
+	stc                    ; Strings differ
 	ret
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;                  DATA SECTION (STRINGS)                  ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-cmd_name:	db "name",0
-cmd_help:	db "help",0
-cmd_clear:	db "clear",0
+msg:           db "Magic Number: 0x", 0
+prompt_msg:    db 13, 10, "Enter your Name: ", 0
 
-msg_hello:	db "Hello Devjit!", 0x0D, 0x0A, 0
-msg_help:	db "Commands: name, help, clear", 0x0D, 0x0A, 0
-msg_unknown:	db "Unknown Command!", 0x0D, 0x0A, 0
+msg_hello:     db 13, 10, "Hello Devjit!", 0
+msg_help:      db 13, 10, "Commands: name, help, clear", 0
+msg_unknown:   db 13, 10, "Unknown Command!", 0
 
-msg: 		db "Magic Number: 0x", 0
-prompt_msg: 	db 13, 10, "Enter your Name: ", 0
-echo_msg:	db 13, 10, "You Typed: ", 0
+cmd_name:      db "name", 0
+cmd_help:      db "help", 0
+cmd_clear:     db "clear", 0
 
-input_buf:  	times 64 db 0
+input_buf:     times 64 db 0         ; Max input length = 64
