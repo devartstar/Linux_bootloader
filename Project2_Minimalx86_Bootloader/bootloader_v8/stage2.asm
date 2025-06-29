@@ -60,25 +60,38 @@ start:
 .done_input:
 	mov byte [di], 0	; Null-terminate string
 
+	; Echo newline
+	mov ah, 0x0E
+	mov al, 0x0D
+	int 0x10
+	mov al, 0x0A
+	int 0x10
+
 	; Reset SI to start of input buffer for comparison
 	mov si, input_buf
 
 	; Compare with "name"
 	mov di, cmd_name
 	call str_cmp
-	jnc cmd_name_handler
+	jc .try_help		; Jump if no match (carry set)
+	jmp cmd_name_handler
 
+.try_help:
 	; Reset SI again for each comparison
 	mov si, input_buf
 	mov di, cmd_help
 	call str_cmp
-	jnc cmd_help_handler
+	jc .try_clear		; Jump if no match (carry set)
+	jmp cmd_help_handler
 
+.try_clear:
 	mov si, input_buf
 	mov di, cmd_clear
 	call str_cmp
-	jnc cmd_clear_handler
+	jc .unknown_cmd		; Jump if no match (carry set)
+	jmp cmd_clear_handler
 
+.unknown_cmd:
 	; Unknown input
 	mov si, msg_unknown
 	call print_str
@@ -120,8 +133,10 @@ cmd_clear_handler:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; Compare strings pointed by SI and DI
-; Returns CF=0 if match
+; Returns CF=1 if no match, CF=0 if match
 str_cmp:
+	push si
+	push di
 .next:
 	lodsb           ; Load byte at [SI] → AL
 	scasb           ; Compare AL with [DI], DI++
@@ -130,10 +145,14 @@ str_cmp:
 	test al, al     ; If AL == 0 → end of string
 	jnz .next
 
+	pop di
+	pop si
 	clc             ; Match → clear carry
 	ret
 
 .fail:
+	pop di
+	pop si
 	stc             ; Mismatch → set carry
 	ret
 
