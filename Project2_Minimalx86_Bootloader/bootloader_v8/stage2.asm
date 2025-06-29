@@ -14,8 +14,8 @@ start:
 	call print_str
 
 	; Read the line of input into 0x7000
-	mov di, 0x7000	; input buffer start
-	xor cx, cx	; character count = 0
+	mov di, input_buf	; input buffer start
+	xor cx, cx		; character count = 0
 	; di will point to where the type character stored
 	; cx tracks the number of characters typed
 
@@ -85,7 +85,7 @@ start:
 	je .cmd_clear
 
 	; Default message for invalid input
-	mov si, msg_help
+	mov si, msg_unknown
 	call print_str
 	jmp .reset
 
@@ -171,14 +171,6 @@ print_hex16:
 
 	mov cx, 4
 
-print_str:
-	lodsb
-	cmp al, 0
-	je .done
-	mov ah, 0x0E
-	int 0x10
-	jmp print_str
-
 .next_nibble:
 
 	; Rotate left by 4 bits
@@ -208,6 +200,14 @@ print_str:
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+print_str:
+	lodsb
+	cmp al, 0
+	je .done
+	mov ah, 0x0E
+	int 0x10
+	jmp print_str
+
 .done:
 	ret
 
