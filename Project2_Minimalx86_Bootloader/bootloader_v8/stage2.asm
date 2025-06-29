@@ -13,6 +13,12 @@ start:
 	mov si, prompt_msg
 	call print_str
 
+	; Clear input buffer first
+	mov di, input_buf
+	mov cx, 64
+	xor al, al
+	rep stosb
+
 	; Prepare to read user input
 	mov di, input_buf	; Input buffer start
 	xor cx, cx		; Reset character counter
@@ -67,31 +73,30 @@ start:
 	mov al, 0x0A
 	int 0x10
 
-	; Reset SI to start of input buffer for comparison
+	; Check for empty input first
 	mov si, input_buf
+	mov al, [si]
+	cmp al, 0
+	je cmd_name_handler  ; Empty input -> show hello
 
 	; Compare with "name"
+	mov si, input_buf
 	mov di, cmd_name
 	call str_cmp
-	jc .try_help		; Jump if no match (carry set)
-	jmp cmd_name_handler
+	jnc cmd_name_handler
 
-.try_help:
-	; Reset SI again for each comparison
+	; Compare with "help"
 	mov si, input_buf
 	mov di, cmd_help
 	call str_cmp
-	jc .try_clear		; Jump if no match (carry set)
-	jmp cmd_help_handler
+	jnc cmd_help_handler
 
-.try_clear:
+	; Compare with "clear"
 	mov si, input_buf
 	mov di, cmd_clear
 	call str_cmp
-	jc .unknown_cmd		; Jump if no match (carry set)
-	jmp cmd_clear_handler
+	jnc cmd_clear_handler
 
-.unknown_cmd:
 	; Unknown input
 	mov si, msg_unknown
 	call print_str
@@ -133,26 +138,22 @@ cmd_clear_handler:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; Compare strings pointed by SI and DI
-; Returns CF=1 if no match, CF=0 if match
+; Returns CF=0 if match, CF=1 if no match
 str_cmp:
-	push si
-	push di
 .next:
 	lodsb           ; Load byte at [SI] → AL
-	scasb           ; Compare AL with [DI], DI++
+	mov ah, [di]    ; Load byte at [DI] → AH
+	inc di          ; Increment DI manually
+	cmp al, ah      ; Compare characters
 	jne .fail
 
 	test al, al     ; If AL == 0 → end of string
 	jnz .next
 
-	pop di
-	pop si
 	clc             ; Match → clear carry
 	ret
 
 .fail:
-	pop di
-	pop si
 	stc             ; Mismatch → set carry
 	ret
 
