@@ -2,10 +2,6 @@
 [ORG 0x0000]                  ; Because Stage1 loads this to 0x0600:0000
 
 start:
-    ; Print debug character to ensure Stage2 starts
-    mov ah, 0x0E
-    mov al, 'x'
-    int 0x10
 
     ; Set up segment registers
     cli
