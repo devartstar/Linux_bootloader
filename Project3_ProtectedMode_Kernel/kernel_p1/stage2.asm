@@ -47,13 +47,19 @@ disk_error:
 	jmp $
 
 print_str:
-	lodsb
-	cmp al, 0
-	je .done
-
-	mov ah, 0x0E
-	int 0x10
-	jmp print_str
+    push ax              ; Save registers
+    push si
+.loop:
+    lodsb               ; Load byte from [DS:SI] into AL
+    cmp al, 0           ; Check for null terminator
+    je .done
+    mov ah, 0x0E        ; Make sure AH is set for each character
+    int 0x10            ; Print character
+    jmp .loop
+.done:
+    pop si              ; Restore registers
+    pop ax
+    ret
 
 .done:
 	ret
