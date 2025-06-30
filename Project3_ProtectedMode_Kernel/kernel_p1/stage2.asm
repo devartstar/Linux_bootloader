@@ -1,5 +1,5 @@
 [BITS 16]
-; [ORG 0x0600]
+[ORG 0x0600]
 ; stage2 bootloader will be loaded at 0x0600 mem loc by stage1
 
 start:
