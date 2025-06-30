@@ -1,10 +1,14 @@
 [BITS 16]
-[ORG 0x0600]
+; [ORG 0x0600]
 ; stage2 bootloader will be loaded at 0x0600 mem loc by stage1
 
 start:
+	mov ah, 0x0E
+	mov al, 'x'
+	int 0x10
+
 	cli
-	mov ax, ax
+	xor ax, ax
 	mov ds, ax
 	mov es, ax
 	sti
