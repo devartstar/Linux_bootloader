@@ -105,28 +105,42 @@ protected_mode_entry:
     ; Set up protected mode stack
     mov esp, 0x90000           ; Set stack pointer to a safe location
 
-    ; Clear screen first
-    mov edi, 0xB8000
-    mov ecx, 80*25             ; 80x25 characters
-    mov ax, 0x0720             ; Space with gray on black
-    rep stosw
+    ; Don't clear screen immediately - first write a test message
+    ; Write 'P' at top-left to confirm we're in protected mode
+    mov dword [0xB8000], 0x4F504F50  ; 'PP' in white on red background
 
-    ; Write success message to VGA memory
-    ; Calculate the address of pmode_msg in protected mode
-    mov esi, 0x0600 + pmode_msg - 0x0600  ; Physical address of message
-    mov edi, 0xB8000
-    mov ah, 0x0F               ; White on black
-
-write_loop:
-    mov al, [esi]
-    cmp al, 0
-    je write_done
-    mov [edi], ax
-    inc esi
+    ; Write the success message starting from second line
+    mov edi, 0xB8000 + 160     ; Second line (80 chars * 2 bytes per char)
+    
+    ; Write each character of our message manually for debugging
+    mov word [edi], 0x0F50     ; 'P' white on black
     add edi, 2
-    jmp write_loop
+    mov word [edi], 0x0F52     ; 'R' white on black  
+    add edi, 2
+    mov word [edi], 0x0F4F     ; 'O' white on black
+    add edi, 2
+    mov word [edi], 0x0F54     ; 'T' white on black
+    add edi, 2
+    mov word [edi], 0x0F45     ; 'E' white on black
+    add edi, 2
+    mov word [edi], 0x0F43     ; 'C' white on black
+    add edi, 2
+    mov word [edi], 0x0F54     ; 'T' white on black
+    add edi, 2
+    mov word [edi], 0x0F45     ; 'E' white on black
+    add edi, 2
+    mov word [edi], 0x0F44     ; 'D' white on black
+    add edi, 2
+    mov word [edi], 0x0F20     ; ' ' white on black
+    add edi, 2
+    mov word [edi], 0x0F4D     ; 'M' white on black
+    add edi, 2
+    mov word [edi], 0x0F4F     ; 'O' white on black
+    add edi, 2
+    mov word [edi], 0x0F44     ; 'D' white on black
+    add edi, 2
+    mov word [edi], 0x0F45     ; 'E' white on black
 
-write_done:
     ; Stop here - don't jump to kernel yet
     jmp $
 
