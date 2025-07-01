@@ -3,16 +3,16 @@
 
 start:
     cli
-    ; Fix the DS segment issue - keep DS pointing to our load address
-    mov ax, 0x0600             ; Set DS to where we're loaded
+    ; Use the correct segment approach
+    mov ax, 0x60               ; Correct: 0x60 * 16 = 0x600
     mov ds, ax
     mov es, ax
     mov ss, ax
-    mov sp, 0x7C00                 ; Set up stack
+    mov sp, 0x7C00
     sti
 
     ; Debug: Print stage2 boot message
-    mov si, msg_stage2 - 0x0600    ; Adjust offset since DS=0x0600
+    mov si, msg_stage2
     call print_str
 
     ; Enable A20 Line (Method 1: Fast A20)
@@ -34,11 +34,11 @@ start:
     jc disk_error
 
     ; Print success message
-    mov si, msg_loaded - 0x0600    ; Adjust offset
+    mov si, msg_loaded
     call print_str
 
     ; Wait a moment before switching modes
-    mov cx, 0xFFFF
+    mov cx, 0x8000
 delay_loop:
     loop delay_loop
 
@@ -73,7 +73,7 @@ enable_a20:
 ; --------------------------------------------------------------------------------
 ; Real Mode: Error handler if disk fails to load
 disk_error:
-    mov si, msg_error - 0x0600     ; Adjust offset
+    mov si, msg_error
     call print_str
     jmp $
 
@@ -105,25 +105,40 @@ protected_mode_entry:
     ; Set up protected mode stack
     mov esp, 0x90000
 
-    ; Simple test: try to write directly to VGA memory
-    ; If this doesn't work, we know the issue is with protected mode setup
+    ; Clear entire screen first
+    mov edi, 0xB8000
+    mov ecx, 80*25
+    mov ax, 0x0720             ; Space with normal colors
+    rep stosw
+
+    ; Write a very visible message at the top
+    mov edi, 0xB8000
     
-    ; Try multiple approaches to confirm protected mode is working:
-    
-    ; Method 1: Write single characters
-    mov byte [0xB8000], 'P'        ; Character
-    mov byte [0xB8001], 0x4F       ; White on red background
-    
-    mov byte [0xB8002], 'M'        ; Character  
-    mov byte [0xB8003], 0x4F       ; White on red background
-    
-    ; Method 2: Write as word
-    mov word [0xB8004], 0x4F4F     ; 'O' white on red
-    mov word [0xB8006], 0x4F4B     ; 'K' white on red
-    
-    ; If protected mode is working, you should see "PMOK" in white on red
-    ; at the top of the screen
-    
+    ; Write "PROTECTED MODE SUCCESS!" in bright colors
+    mov word [edi+0], 0x4F50   ; 'P' white on red
+    mov word [edi+2], 0x4F52   ; 'R' white on red
+    mov word [edi+4], 0x4F4F   ; 'O' white on red
+    mov word [edi+6], 0x4F54   ; 'T' white on red
+    mov word [edi+8], 0x4F45   ; 'E' white on red
+    mov word [edi+10], 0x4F43  ; 'C' white on red
+    mov word [edi+12], 0x4F54  ; 'T' white on red
+    mov word [edi+14], 0x4F45  ; 'E' white on red
+    mov word [edi+16], 0x4F44  ; 'D' white on red
+    mov word [edi+18], 0x4F20  ; ' ' white on red
+    mov word [edi+20], 0x4F4D  ; 'M' white on red
+    mov word [edi+22], 0x4F4F  ; 'O' white on red
+    mov word [edi+24], 0x4F44  ; 'D' white on red
+    mov word [edi+26], 0x4F45  ; 'E' white on red
+    mov word [edi+28], 0x4F20  ; ' ' white on red
+    mov word [edi+30], 0x4F53  ; 'S' white on red
+    mov word [edi+32], 0x4F55  ; 'U' white on red
+    mov word [edi+34], 0x4F43  ; 'C' white on red
+    mov word [edi+36], 0x4F43  ; 'C' white on red
+    mov word [edi+38], 0x4F45  ; 'E' white on red
+    mov word [edi+40], 0x4F53  ; 'S' white on red
+    mov word [edi+42], 0x4F53  ; 'S' white on red
+    mov word [edi+44], 0x4F21  ; '!' white on red
+
     ; Infinite loop
     jmp $
 
@@ -157,16 +172,13 @@ gdt_end:
 
 gdt_descriptor:
     dw gdt_end - gdt_start - 1    ; Limit (size - 1)
-    dd gdt_start                  ; Base address (assembler calculates this correctly with ORG)
+    dd gdt_start + 0x0600         ; FIXED: Add our load address
 
 ; --------------------------------------------------------------------------------
 ; Strings
 msg_stage2:   db "Stage2: Enabling A20, Loading Kernel...", 0x0D, 0x0A, 0
 msg_loaded:   db "Kernel Loaded! Switching to Protected Mode...", 0x0D, 0x0A, 0
 msg_error:    db "Disk Read Error: Cannot Load Kernel!", 0x0D, 0x0A, 0
-
-; Protected mode message (null-terminated for our custom writer)
-pmode_msg:    db "PROTECTED MODE ACTIVE - SUCCESS!", 0
 
 ; --------------------------------------------------------------------------------
 ; Pad to 512 bytes
