@@ -14,6 +14,12 @@ start:
     mov si, msg
     call print_str
 
+    ; Enable A20
+    call enable_a20
+
+    mov si, a20_msg
+	call print_str
+
     ; Load 2 sectors from LBA=4 (CHS=0,0,5) into 0x1000:0000
     mov ax, 0x1000           ; Segment where kernel will be loaded
     mov es, ax
@@ -33,8 +39,14 @@ start:
     mov si, loaded_msg
     call print_str
 
+    ; We loaded the kernel by not yet jumping to it
+	; Reason: We are still in 16 bit real mode, 
+	; kernel is a 32 bit program (in protected mode)
     ; Jump to the loaded kernel (0x1000:0000)
-    jmp 0x1000:0000
+    ; jmp 0x1000:0000
+
+	; Next: set up GDT and switch to protected mode
+	jmp $
 
 disk_error:
     mov si, err_msg
@@ -71,6 +83,7 @@ print_str:
 msg:         db "[Stage2 Bootloader] Loading Kernel...", 0x0D, 0x0A, 0
 loaded_msg:  db "[Stage2 Bootloader] Kernel Loaded Successfully!", 0x0D, 0x0A, 0
 err_msg:     db "[Stage2 Bootloader] Disk Read Error!", 0x0D, 0x0A, 0
+a20_msg:		db "[Stage2 Bootloader] Enabled A20 Line!", 0x0D, 0x0A, 0
 
 ; Pad to 512 bytes
 times 512 - ($ - $$) db 0
