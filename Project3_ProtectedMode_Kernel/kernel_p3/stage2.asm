@@ -103,45 +103,28 @@ protected_mode_entry:
     mov ss, ax
     
     ; Set up protected mode stack
-    mov esp, 0x90000           ; Set stack pointer to a safe location
+    mov esp, 0x90000
 
-    ; Don't clear screen immediately - first write a test message
-    ; Write 'P' at top-left to confirm we're in protected mode
-    mov dword [0xB8000], 0x4F504F50  ; 'PP' in white on red background
-
-    ; Write the success message starting from second line
-    mov edi, 0xB8000 + 160     ; Second line (80 chars * 2 bytes per char)
+    ; Simple test: try to write directly to VGA memory
+    ; If this doesn't work, we know the issue is with protected mode setup
     
-    ; Write each character of our message manually for debugging
-    mov word [edi], 0x0F50     ; 'P' white on black
-    add edi, 2
-    mov word [edi], 0x0F52     ; 'R' white on black  
-    add edi, 2
-    mov word [edi], 0x0F4F     ; 'O' white on black
-    add edi, 2
-    mov word [edi], 0x0F54     ; 'T' white on black
-    add edi, 2
-    mov word [edi], 0x0F45     ; 'E' white on black
-    add edi, 2
-    mov word [edi], 0x0F43     ; 'C' white on black
-    add edi, 2
-    mov word [edi], 0x0F54     ; 'T' white on black
-    add edi, 2
-    mov word [edi], 0x0F45     ; 'E' white on black
-    add edi, 2
-    mov word [edi], 0x0F44     ; 'D' white on black
-    add edi, 2
-    mov word [edi], 0x0F20     ; ' ' white on black
-    add edi, 2
-    mov word [edi], 0x0F4D     ; 'M' white on black
-    add edi, 2
-    mov word [edi], 0x0F4F     ; 'O' white on black
-    add edi, 2
-    mov word [edi], 0x0F44     ; 'D' white on black
-    add edi, 2
-    mov word [edi], 0x0F45     ; 'E' white on black
-
-    ; Stop here - don't jump to kernel yet
+    ; Try multiple approaches to confirm protected mode is working:
+    
+    ; Method 1: Write single characters
+    mov byte [0xB8000], 'P'        ; Character
+    mov byte [0xB8001], 0x4F       ; White on red background
+    
+    mov byte [0xB8002], 'M'        ; Character  
+    mov byte [0xB8003], 0x4F       ; White on red background
+    
+    ; Method 2: Write as word
+    mov word [0xB8004], 0x4F4F     ; 'O' white on red
+    mov word [0xB8006], 0x4F4B     ; 'K' white on red
+    
+    ; If protected mode is working, you should see "PMOK" in white on red
+    ; at the top of the screen
+    
+    ; Infinite loop
     jmp $
 
 ; --------------------------------------------------------------------------------
