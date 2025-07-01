@@ -41,8 +41,10 @@ start:
 delay_loop:
     loop delay_loop
 
-    ; Set up GDT for protected mode
+    ; Disable interrupts before protected mode switch
     cli
+
+    ; Set up GDT for protected mode
     lgdt [gdt_descriptor]      ; Load Global Descriptor Table
 
     ; Set CR0 bit 0 (PE - Protected Mode Enable)
@@ -106,25 +108,32 @@ protected_mode_entry:
     ; Set up protected mode stack
     mov esp, 0x90000           ; Set stack pointer to a safe location
 
-    ; Simple test: write to VGA text mode memory
-    ; This will display 'P' in white on blue background at top-left
-    mov dword [0xB8000], 0x1F501F50  ; 'PP' in white on blue
+    ; Clear screen first
+    mov edi, 0xB8000
+    mov ecx, 80*25             ; 80x25 characters
+    mov ax, 0x0720             ; Space with gray on black
+    rep stosw
 
-    ; Jump to loaded kernel code (starts at 0x10000)
-    ; Add a simple check first
-    mov eax, [0x10000]         ; Read first 4 bytes of kernel
-    cmp eax, 0                 ; Check if kernel is loaded
-    je kernel_not_found
-    
-    jmp 0x10000
+    ; Write success message to VGA memory
+    mov esi, pmode_msg
+    mov edi, 0xB8000
+    mov ah, 0x0F               ; White on black
 
-kernel_not_found:
-    ; If kernel not found, write 'E' for error
-    mov dword [0xB8000], 0x4F454F45  ; 'EE' in white on red
+write_loop:
+    mov al, [esi]
+    cmp al, 0
+    je write_done
+    mov [edi], ax
+    inc esi
+    add edi, 2
+    jmp write_loop
+
+write_done:
+    ; Stop here - don't jump to kernel yet
     jmp $
 
 ; --------------------------------------------------------------------------------
-; Global Descriptor Table (GDT) - Align to 4-byte boundary
+; Global Descriptor Table (GDT) - Must be in 16-bit section
 
 [BITS 16]                     ; Back to 16-bit for GDT setup
 
@@ -153,13 +162,16 @@ gdt_end:
 
 gdt_descriptor:
     dw gdt_end - gdt_start - 1    ; Limit (size - 1)
-    dd gdt_start                  ; Base address
+    dd gdt_start + 0x0600         ; Base address (add our load address)
 
 ; --------------------------------------------------------------------------------
 ; Strings
 msg_stage2:   db "Stage2: Enabling A20, Loading Kernel...", 0x0D, 0x0A, 0
 msg_loaded:   db "Kernel Loaded! Switching to Protected Mode...", 0x0D, 0x0A, 0
 msg_error:    db "Disk Read Error: Cannot Load Kernel!", 0x0D, 0x0A, 0
+
+; Protected mode message (null-terminated for our custom writer)
+pmode_msg:    db "PROTECTED MODE ACTIVE - SUCCESS!", 0
 
 ; --------------------------------------------------------------------------------
 ; Pad to 512 bytes
