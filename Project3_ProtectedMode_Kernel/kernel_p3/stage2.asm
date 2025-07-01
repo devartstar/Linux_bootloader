@@ -3,7 +3,8 @@
 
 start:
     cli
-    xor ax, ax
+    ; Fix the DS segment issue - keep DS pointing to our load address
+    mov ax, 0x0600             ; Set DS to where we're loaded
     mov ds, ax
     mov es, ax
     mov ss, ax
@@ -11,7 +12,7 @@ start:
     sti
 
     ; Debug: Print stage2 boot message
-    mov si, msg_stage2
+    mov si, msg_stage2 - 0x0600    ; Adjust offset since DS=0x0600
     call print_str
 
     ; Enable A20 Line (Method 1: Fast A20)
@@ -33,7 +34,7 @@ start:
     jc disk_error
 
     ; Print success message
-    mov si, msg_loaded
+    mov si, msg_loaded - 0x0600    ; Adjust offset
     call print_str
 
     ; Wait a moment before switching modes
@@ -72,25 +73,21 @@ enable_a20:
 ; --------------------------------------------------------------------------------
 ; Real Mode: Error handler if disk fails to load
 disk_error:
-    mov si, msg_error
+    mov si, msg_error - 0x0600     ; Adjust offset
     call print_str
     jmp $
 
 ; --------------------------------------------------------------------------------
 ; Print null-terminated string from DS:SI
 print_str:
-    push ax
-    push si
-.next:
+    mov ah, 0x0E
+.loop:
     lodsb
     cmp al, 0
     je .done
-    mov ah, 0x0E
     int 0x10
-    jmp .next
+    jmp .loop
 .done:
-    pop si
-    pop ax
     ret
 
 ; --------------------------------------------------------------------------------
@@ -115,7 +112,8 @@ protected_mode_entry:
     rep stosw
 
     ; Write success message to VGA memory
-    mov esi, pmode_msg
+    ; Calculate the address of pmode_msg in protected mode
+    mov esi, 0x0600 + pmode_msg - 0x0600  ; Physical address of message
     mov edi, 0xB8000
     mov ah, 0x0F               ; White on black
 
@@ -162,7 +160,7 @@ gdt_end:
 
 gdt_descriptor:
     dw gdt_end - gdt_start - 1    ; Limit (size - 1)
-    dd gdt_start + 0x0600         ; Base address (add our load address)
+    dd gdt_start                  ; Base address (assembler calculates this correctly with ORG)
 
 ; --------------------------------------------------------------------------------
 ; Strings
