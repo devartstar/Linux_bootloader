@@ -6,11 +6,16 @@ start:
     xor ax, ax
     mov ds, ax
     mov es, ax
+    mov ss, ax
+    mov sp, 0x7C00                 ; Set up stack
     sti
 
     ; Debug: Print stage2 boot message
     mov si, msg_stage2
     call print_str
+
+    ; Enable A20 Line (Method 1: Fast A20)
+    call enable_a20
 
     ; Load 2 sectors from LBA=4 (CHS=0,0,5) into ES:BX = 0x1000:0000
     mov ax, 0x1000             ; segment = 0x1000 (means physical 0x10000)
@@ -31,6 +36,11 @@ start:
     mov si, msg_loaded
     call print_str
 
+    ; Wait a moment before switching modes
+    mov cx, 0xFFFF
+delay_loop:
+    loop delay_loop
+
     ; Set up GDT for protected mode
     cli
     lgdt [gdt_descriptor]      ; Load Global Descriptor Table
@@ -42,6 +52,20 @@ start:
 
     ; Perform far jump to clear prefetch queue and switch to protected mode
     jmp 0x08:protected_mode_entry
+
+; --------------------------------------------------------------------------------
+; Enable A20 Line using Fast A20 method
+enable_a20:
+    push ax
+    in al, 0x92                ; Read from Fast A20 port
+    test al, 2                 ; Check if A20 is already enabled
+    jnz .a20_done             ; If bit 1 is set, A20 is enabled
+    or al, 2                   ; Set bit 1 to enable A20
+    and al, 0xFE              ; Clear bit 0 (don't reset)
+    out 0x92, al              ; Write back to enable A20
+.a20_done:
+    pop ax
+    ret
 
 ; --------------------------------------------------------------------------------
 ; Real Mode: Error handler if disk fails to load
@@ -78,34 +102,52 @@ protected_mode_entry:
     mov fs, ax
     mov gs, ax
     mov ss, ax
+    
+    ; Set up protected mode stack
+    mov esp, 0x90000           ; Set stack pointer to a safe location
+
+    ; Simple test: write to VGA text mode memory
+    ; This will display 'P' in white on blue background at top-left
+    mov dword [0xB8000], 0x1F501F50  ; 'PP' in white on blue
 
     ; Jump to loaded kernel code (starts at 0x10000)
+    ; Add a simple check first
+    mov eax, [0x10000]         ; Read first 4 bytes of kernel
+    cmp eax, 0                 ; Check if kernel is loaded
+    je kernel_not_found
+    
     jmp 0x10000
 
+kernel_not_found:
+    ; If kernel not found, write 'E' for error
+    mov dword [0xB8000], 0x4F454F45  ; 'EE' in white on red
+    jmp $
+
 ; --------------------------------------------------------------------------------
-; Global Descriptor Table (GDT)
+; Global Descriptor Table (GDT) - Align to 4-byte boundary
 
 [BITS 16]                     ; Back to 16-bit for GDT setup
 
+align 4                       ; Ensure GDT is aligned
 gdt_start:
 gdt_null:
     dq 0                      ; 8 bytes of zeros (null descriptor)
 
 gdt_code:                     ; Code Segment Descriptor
+    dw 0xFFFF                 ; Limit Low (0-15)
+    dw 0x0000                 ; Base Low (0-15)
+    db 0x00                   ; Base Mid (16-23)
+    db 10011010b              ; Access: P=1, DPL=00, S=1, Type=1010 (code, readable)
+    db 11001111b              ; Flags: G=1, D=1, L=0, AVL=0, Limit High=1111
+    db 0x00                   ; Base High (24-31)
+
+gdt_data:                     ; Data Segment Descriptor
     dw 0xFFFF                 ; Limit Low
     dw 0x0000                 ; Base Low
     db 0x00                   ; Base Mid
-    db 10011010b              ; Access: present, ring 0, code, readable
-    db 11001111b              ; Flags: 4K, 32-bit
+    db 10010010b              ; Access: P=1, DPL=00, S=1, Type=0010 (data, writable)
+    db 11001111b              ; Flags: G=1, D=1, L=0, AVL=0, Limit High=1111
     db 0x00                   ; Base High
-
-gdt_data:                     ; Data Segment Descriptor
-    dw 0xFFFF
-    dw 0x0000
-    db 0x00
-    db 10010010b              ; Access: present, ring 0, data, writable
-    db 11001111b              ; Flags: 4K, 32-bit
-    db 0x00
 
 gdt_end:
 
@@ -115,8 +157,8 @@ gdt_descriptor:
 
 ; --------------------------------------------------------------------------------
 ; Strings
-msg_stage2:   db "Stage2: Loading Kernel...", 0x0D, 0x0A, 0
-msg_loaded:   db "Kernel Loaded Successfully!", 0x0D, 0x0A, 0
+msg_stage2:   db "Stage2: Enabling A20, Loading Kernel...", 0x0D, 0x0A, 0
+msg_loaded:   db "Kernel Loaded! Switching to Protected Mode...", 0x0D, 0x0A, 0
 msg_error:    db "Disk Read Error: Cannot Load Kernel!", 0x0D, 0x0A, 0
 
 ; --------------------------------------------------------------------------------
