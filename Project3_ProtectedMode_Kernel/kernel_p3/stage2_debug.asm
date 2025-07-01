@@ -19,34 +19,30 @@ start:
     mov al, ' '
     int 0x10
 
+    ; DON'T reset DS - keep it pointing to where we're loaded
     cli
-    xor ax, ax
+    mov ax, 0x0600      ; Set DS to our load segment
     mov ds, ax
     mov es, ax
     mov ss, ax
     mov sp, 0x7C00
     sti
 
-    ; Print full message
-    mov si, msg_stage2
+    ; Now try string print
+    mov si, msg_stage2 - 0x0600  ; Adjust offset since DS=0x0600
     call print_str
 
-    ; Don't do anything else for now - just infinite loop
     jmp $
 
 print_str:
-    push ax
-    push si
-.next:
+    mov ah, 0x0E
+.loop:
     lodsb
     cmp al, 0
     je .done
-    mov ah, 0x0E
     int 0x10
-    jmp .next
+    jmp .loop
 .done:
-    pop si
-    pop ax
     ret
 
 msg_stage2: db "Stage2 is running!", 0x0D, 0x0A, 0
